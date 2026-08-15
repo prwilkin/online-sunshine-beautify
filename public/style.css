@@ -1,0 +1,349 @@
+:root {
+	/* Light mode */
+	--bg: #f8fafc;
+	--surface: #ffffff;
+	--text: #0f172a;
+	--text-muted: #64748b;
+	--border: #e2e8f0;
+	--primary: #2563eb;
+	--primary-hover: #1d4ed8;
+	--shadow: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+	--radius: 12px;
+}
+
+[data-theme="dark"] {
+	--bg: #0f172a;
+	--surface: #1e293b;
+	--text: #f1f5f9;
+	--text-muted: #94a3b8;
+	--border: #334155;
+	--primary: #3b82f6;
+	--primary-hover: #60a5fa;
+	--shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.2);
+}
+
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+
+body {
+	font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+	background: var(--bg);
+	color: var(--text);
+	line-height: 1.6;
+	min-height: 100vh;
+	transition: background 0.2s, color 0.2s;
+}
+
+.container {
+	max-width: 640px;
+	margin: 0 auto;
+	padding: 2.5rem 1.25rem;
+}
+
+header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 2.5rem;
+}
+
+h1 {
+	font-size: 1.75rem;
+	font-weight: 700;
+	letter-spacing: -0.025em;
+}
+
+.theme-toggle {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	color: var(--text);
+	width: 42px;
+	height: 42px;
+	border-radius: 50%;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 1.2rem;
+	transition: background 0.15s, border-color 0.15s;
+	box-shadow: var(--shadow);
+}
+
+.theme-toggle:hover {
+	background: var(--border);
+}
+
+.card {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 1.75rem;
+	box-shadow: var(--shadow);
+	margin-bottom: 1.75rem;
+}
+
+label {
+	display: block;
+	font-size: 0.9rem;
+	font-weight: 500;
+	margin-bottom: 0.5rem;
+	color: var(--text-muted);
+}
+
+.input-row {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 0.75rem;
+}
+
+input[type="url"] {
+	flex: 1 1 220px;
+	min-width: 0;
+	padding: 0.75rem 1rem;
+	font-size: 1rem;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--bg);
+	color: var(--text);
+	outline: none;
+	transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+input[type="url"]:focus {
+	border-color: var(--primary);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
+}
+
+button[type="submit"] {
+	flex: 0 0 auto;
+	padding: 0.75rem 1.25rem;
+	background: var(--primary);
+	color: white;
+	border: none;
+	border-radius: 8px;
+	font-size: 1rem;
+	font-weight: 500;
+	cursor: pointer;
+	transition: background 0.15s;
+	white-space: nowrap;
+}
+
+button[type="submit"]:hover {
+	background: var(--primary-hover);
+}
+
+@media (max-width: 480px) {
+	button[type="submit"] {
+		flex: 1 1 100%;
+	}
+}
+
+.instructions {
+	color: var(--text-muted);
+	font-size: 0.95rem;
+}
+
+.instructions h2 {
+	font-size: 1.1rem;
+	color: var(--text);
+	margin-bottom: 0.75rem;
+	font-weight: 600;
+}
+
+.instructions ol {
+	padding-left: 1.25rem;
+}
+
+.instructions li {
+	margin-bottom: 0.4rem;
+}
+
+.instructions code {
+	background: var(--bg);
+	padding: 0.15rem 0.4rem;
+	border-radius: 4px;
+	font-size: 0.88em;
+	border: 1px solid var(--border);
+}
+
+footer {
+	text-align: center;
+	margin-top: 3rem;
+	font-size: 0.85rem;
+	color: var(--text-muted);
+}
+
+/* Results area */
+.results {
+  margin-top: 0;
+  margin-bottom: 1.75rem;
+}
+
+/* ===== Cleaned statute styles ===== */
+.cleaned-statute {
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.55;
+  font-size: 0.97rem;
+}
+
+.statute-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+  gap: 0.5rem;
+}
+
+.statute-header button {
+  padding: 0.4rem 0.85rem;
+  font-size: 0.85rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.statute-header button:hover {
+  background: var(--border);
+}
+
+.statute-header button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+/* Top-level section */
+details.statute-section {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 1rem;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+details.statute-section > summary {
+  padding: 1rem 1.15rem;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  background: color-mix(in srgb, var(--primary) 7%, transparent);
+  font-weight: 600;
+}
+
+details.statute-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.statute-section > summary::before {
+  content: "▸";
+  font-size: 0.9em;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+details.statute-section[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.sec-num {
+  color: var(--primary);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sec-catchline {
+  font-weight: 600;
+}
+
+.section-content {
+  padding: 0.9rem 1.25rem 1.4rem;
+  border-top: 1px solid var(--border);
+}
+
+/* ===== Clean statute lines ===== */
+.section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.statute-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  line-height: 1.55;
+}
+
+.statute-line .Number {
+  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--primary);
+  min-width: 3.2em;
+}
+
+.statute-line .Text {
+  flex: 1;
+}
+
+/* Indentation */
+.level-0 { margin-left: 0; }
+.level-1 { margin-left: 1.5rem; }
+.level-2 { margin-left: 3rem; }
+.level-3 { margin-left: 4.5rem; }
+
+.section-body a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.reversion {
+  margin-left: 1.6rem;
+  font-style: italic;
+  color: var(--text-muted);
+  padding: 0.15rem 0;
+}
+
+/* History */
+.history-block,
+.History {
+  margin-top: 1.4rem;
+  padding-top: 0.9rem;
+  border-top: 1px dashed var(--border);
+  font-size: 0.88em;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.HistoryTitle {
+  font-weight: 700;
+  margin-right: 0.4em;
+  color: var(--text);
+}
+
+/* Catchline index (full chapter pages) */
+.CatchlineIndex {
+  margin-bottom: 1.5rem;
+  padding: 0.9rem 1.1rem;
+  background: var(--bg);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.IndexItem {
+  margin: 0.3rem 0;
+}
+
+/* Utility */
+.loading, .error {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-muted);
+}
+.error {
+  color: #dc2626;
+}

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Statute Cleaner</title>
+	<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+	<div class="container">
+		<header>
+			<h1>Statute Cleaner</h1>
+			<button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+				🌙
+			</button>
+		</header>
+
+		<div class="card">
+			<form id="urlForm">
+				<label for="urlInput">Paste a Florida statute URL from Online Sunshine</label>
+				<div class="input-row">
+					<input type="url" id="urlInput" placeholder="https://www.leg.state.fl.us/statutes/..." required
+						autocomplete="off">
+					<button type="submit">Clean</button>
+				</div>
+			</form>
+		</div>
+
+		<div class="card instructions">
+			<h2>How to use</h2>
+			<ol>
+				<li>Go to <code>www.leg.state.fl.us</code> and open any statute page.</li>
+				<li>Copy the full URL from your browser.</li>
+				<li>Paste it above and click <strong>Clean</strong>.</li>
+				<li>The page will be reformatted with clearer indentation and collapsible sections.</li>
+			</ol>
+			<p style="margin-top: 1rem;">
+				Currently optimized for Florida Statutes. Other sites will not be fetched.
+			</p>
+		</div>
+
+		<footer>
+			Simple tool • No data stored
+		</footer>
+	</div>
+
+	<script src="script.js"></script>
+</body>
+
+</html>
