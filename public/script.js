@@ -76,7 +76,7 @@ function createResultsCard() {
  */
 function cleanStatuteHtml(rawHtml) {
 	console.group('Statute Cleaner – parsing');
-	console.log('Raw HTML length:', rawHtml.length);
+	//console.log('Raw HTML length:', rawHtml.length);
 
 	// ---------- 1. Extract the statute fragment as a string ----------
 	// The real content is almost always inside a <font face="Verdana"...> that
@@ -89,7 +89,7 @@ function cleanStatuteHtml(rawHtml) {
 	);
 	if (fontMatch) {
 		statuteHtml = fontMatch[1];
-		console.log('Found content inside <font face="Verdana">');
+		//console.log('Found content inside <font face="Verdana">');
 	}
 
 	// Method B: fallback – grab everything from the innermost <div class="Section">
@@ -104,7 +104,7 @@ function cleanStatuteHtml(rawHtml) {
 				if (idx !== -1 && idx < end) end = idx;
 			}
 			statuteHtml = rawHtml.slice(sectionStart, end);
-			console.log('Fell back to slicing from <div class="Section">');
+			//console.log('Fell back to slicing from <div class="Section">');
 		}
 	}
 
@@ -114,9 +114,9 @@ function cleanStatuteHtml(rawHtml) {
 		console.warn('Could not isolate nested statute – parsing whole page');
 	}
 
-	console.log('Extracted fragment length:', statuteHtml.length);
-	console.log('Contains class="Section":', statuteHtml.includes('class="Section"'));
-	console.log('Contains class="Chapters":', statuteHtml.includes('class="Chapters"'));
+	//console.log('Extracted fragment length:', statuteHtml.length);
+	//console.log('Contains class="Section":', statuteHtml.includes('class="Section"'));
+	//console.log('Contains class="Chapters":', statuteHtml.includes('class="Chapters"'));
 
 	// ---------- 2. Parse the extracted fragment ----------
 	const parser = new DOMParser();
@@ -129,7 +129,7 @@ function cleanStatuteHtml(rawHtml) {
 		// Try looking in the whole original document as a last resort
 		const fullDoc = parser.parseFromString(rawHtml, 'text/html');
 		statuteRoot = fullDoc.querySelector('.Chapters') || fullDoc.querySelector('.Section');
-		console.log('Tried full document parse, found root?', !!statuteRoot);
+		//console.log('Tried full document parse, found root?', !!statuteRoot);
 	}
 
 	if (!statuteRoot) {
@@ -139,7 +139,7 @@ function cleanStatuteHtml(rawHtml) {
             Open the browser console (F12) for detailed logs.</p>`;
 	}
 
-	console.log('Successfully found root:', statuteRoot.className);
+	//console.log('Successfully found root:', statuteRoot.className);
 	console.groupEnd();
 
 	// ---------- 3. Clone and process ----------
@@ -150,7 +150,7 @@ function cleanStatuteHtml(rawHtml) {
 		? [cleaned]
 		: Array.from(cleaned.querySelectorAll('.Section'));
 
-	console.log('Number of .Section elements to process:', sections.length);
+	//console.log('Number of .Section elements to process:', sections.length);
 
 	// We will collect the new details elements
 	const newSections = [];
