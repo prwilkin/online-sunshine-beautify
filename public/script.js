@@ -269,9 +269,18 @@ function processSectionBody(bodyEl) {
 	// 4b. Protect Florida statute citations so they are never split
 	//     Matches: "s. 893.135(1)", "ss. 775.082", "s. %%LINK0%% (1)", etc.
 	//     Does NOT match hierarchical list items like "s. Human trafficking"
+	//     Captures forms such as:
+	//       s. 893.03
+	//       s. 893.03(2)
+	//       s. 893.03(2)(b)
+	//       s. 893.03(2)(b)1.
+	//       ss. 775.082, 775.083
+	//       s. %%LINK0%% (1)   (after link protection)
 	const citations = [];
+
+	// 1. Classic "s. / ss." forms
 	text = text.replace(
-		/\b(?:s|ss)\.?\s*(?:%%LINK\d+%%|\d[\d.]*)(?:\s*\([0-9a-z]+\))*/gi,
+		/\b(?:s|ss)\.?\s*(?:%%LINK\d+%%|\d+\.\d+)(?:\s*\([0-9a-z]+\))*(?:\s*\d+\.)?(?:\s*[a-z]\.)?/gi,
 		(match) => {
 			const id = citations.length;
 			citations.push(match);
@@ -279,71 +288,211 @@ function processSectionBody(bodyEl) {
 		}
 	);
 
-	// 5. Split on Florida numbering patterns
-	//    We keep the hierarchical style you liked
-	// Split only on real structural numbers, never on citations
-	const numberPattern = /(?:^|\s)(\(\d+\)|\([a-z]\)|(?<![.\d])\d+\.|(?<![a-zA-Z&;])[a-z]\.)(?=\s|$)/g;
-	const matches = [...text.matchAll(numberPattern)];
-	const lines = [];
-
-	if (matches.length === 0) {
-		lines.push({ number: '', text: restoreAll(text, links, citations), level: 0 });
-	} else {
-		// text before first number
-		if (matches[0].index > 0) {
-			const preamble = text.slice(0, matches[0].index).trim();
-			if (preamble) {
-				lines.push({ number: '', text: restoreAll(preamble, links, citations), level: 0 });
-			}
+	// 2. Cross-references that are explicitly introduced by
+	//    "subparagraph(s)", "sub-subparagraph(s)", "paragraph(s)", etc.
+	//    e.g.  sub-subparagraphs (1)(a)3.a.-j.
+	//          subparagraphs (2)(b)1.-3.
+	//          paragraph (1)(a)
+	text = text.replace(
+		/\b(?:sub-?subparagraphs?|subparagraphs?|paragraphs?|subsections?)\s+\([0-9]+\)(?:\([a-z]+\))*(?:\d+\.)?(?:[a-z]\.)?(?:-[a-z]\.)?/gi,
+		(match) => {
+			const id = citations.length;
+			citations.push(match);
+			return `%%CITE${id}%%`;
 		}
+	);
 
-		for (let i = 0; i < matches.length; i++) {
-			const m = matches[i];
-			const number = m[1];                 // the pure number (capture group)
-			const start = m.index + m[0].length; // full-match length, including any leading whitespace
-			const end = (i + 1 < matches.length) ? matches[i + 1].index : text.length;
-			let body = text.slice(start, end).trim();
 
-			// If the body starts with another structural number, leave it empty
-			// so the next match becomes its own line (gives the hierarchical style)
-			if (/^(\(\d+\)|\([a-z]\)|\d+\.|[a-z]\.)/.test(body)) {
-				body = '';
-			}
 
-			body = body.replace(/^[\s.—–-]+/, '').trim();
+	// 5. Split on Florida hierarchical numbering (sequential + nested)
+	const sub1re = /\([0-9]+\)/g;
+	const sub2re = /\([a-z]+\)(?![;\-])/g;
+	const sub3re = /(?<![\d,$])[0-9]+\.(?![;\-a-zA-Z\d])/g;   // ← changed
+	const sub4re = /(?<![a-zA-Z])[a-z]\.(?![;\-a-zA-Z])/g;     // ← tightened for safety
 
-			lines.push({
-				number,
-				text: restoreAll(body, links, citations),
-				level: getIndentLevel(number)
-			});
-		}
+	function nextLetter(prev, curr) {
+		if (!prev) return curr === "a";
+		return prev.toLowerCase().charCodeAt(0) + 1 === curr.toLowerCase().charCodeAt(0);
 	}
 
-	// 6. Build DOM
+	/**
+	 * Sequential hierarchical parser.
+	 * Returns nested structure: array of [header, content] where content is
+	 * either a string or an array of child nodes.
+	 */
+	function parseSubsections(text) {
+		[sub1re, sub2re, sub3re, sub4re].forEach(r => (r.lastIndex = 0));
+
+		const nested = [];
+		const stack = [];
+		let lastIndex = 0;
+
+		let sub1 = 0;
+		let sub2 = "";
+		let sub3 = 0;
+		let sub4 = "";
+
+		function addContent(content) {
+			if (!content) return;
+			if (stack.length === 0) {
+				nested.push(["", content]);
+			} else {
+				const deepest = stack[stack.length - 1].node;
+				deepest[1] += content;
+			}
+		}
+
+		while (true) {
+			sub1re.lastIndex = lastIndex;
+			sub2re.lastIndex = lastIndex;
+			sub3re.lastIndex = lastIndex;
+			sub4re.lastIndex = lastIndex;
+
+			const m1 = sub1re.exec(text);
+			const m2 = sub2re.exec(text);
+			const m3 = sub3re.exec(text);
+			const m4 = sub4re.exec(text);
+
+			const candidates = [
+				{
+					level: 1,
+					match: m1,
+					valid: m1 && Number(m1[0].slice(1, -1)) > sub1,
+				},
+				{
+					level: 2,
+					match: m2,
+					valid:
+						m2 &&
+						((sub2 === "" && m2[0].slice(1, -1) === "a") ||
+							nextLetter(sub2, m2[0].slice(1, -1))),
+				},
+				{
+					level: 3,
+					match: m3,
+					valid: m3 && Number(m3[0].slice(0, -1)) > sub3,
+				},
+				{
+					level: 4,
+					match: m4,
+					valid:
+						m4 &&
+						((sub4 === "" && m4[0].slice(0, -1) === "a") ||
+							nextLetter(sub4, m4[0].slice(0, -1))),
+				},
+			];
+
+			let chosen = null;
+			let bestIdx = Infinity;
+			for (const c of candidates) {
+				if (c.valid && c.match.index < bestIdx) {
+					bestIdx = c.match.index;
+					chosen = c;
+				}
+			}
+
+			if (!chosen) break;
+
+			addContent(text.slice(lastIndex, chosen.match.index));
+
+			const node = [chosen.match[0], ""];
+
+			while (stack.length && stack[stack.length - 1].level >= chosen.level) {
+				stack.pop();
+			}
+
+			if (stack.length === 0) {
+				nested.push(node);
+			} else {
+				const parent = stack[stack.length - 1].node;
+				if (!Array.isArray(parent[1])) {
+					parent[1] = parent[1] ? [["", parent[1]]] : [];
+				}
+				parent[1].push(node);
+			}
+
+			stack.push({ level: chosen.level, node });
+
+			if (chosen.level === 1) {
+				sub1 = Number(chosen.match[0].slice(1, -1));
+				sub2 = "";
+				sub3 = 0;
+				sub4 = "";
+			} else if (chosen.level === 2) {
+				sub2 = chosen.match[0].slice(1, -1);
+				sub3 = 0;
+				sub4 = "";
+			} else if (chosen.level === 3) {
+				sub3 = Number(chosen.match[0].slice(0, -1));
+				sub4 = "";
+			} else if (chosen.level === 4) {
+				sub4 = chosen.match[0].slice(0, -1);
+			}
+
+			lastIndex = chosen.match.index + chosen.match[0].length;
+		}
+
+		addContent(text.slice(lastIndex));
+
+		return nested;
+	}
+
+	const nested = parseSubsections(text);
+
+	// 6. Build DOM from the nested structure
 	const container = document.createElement('div');
 	container.className = 'section-body';
 
-	lines.forEach(line => {
-		if (!line.number && !line.text) return;
+	function buildFromNested(nodes, depth = 0) {
+		for (const node of nodes) {
+			const [header, content] = node;
 
-		const row = document.createElement('div');
-		row.className = `statute-line level-${line.level}`;
+			if (header) {
+				let immediateText = '';
+				let children = [];
 
-		if (line.number) {
-			const numSpan = document.createElement('span');
-			numSpan.className = 'Number';
-			numSpan.textContent = line.number;
-			row.appendChild(numSpan);
+				if (typeof content === 'string') {
+					immediateText = content;
+				} else if (Array.isArray(content)) {
+					const residual = content.find(c => c[0] === '');
+					if (residual) immediateText = residual[1] || '';
+					children = content.filter(c => c[0] !== '');
+				}
+
+				const row = document.createElement('div');
+				row.className = `statute-line level-${depth}`;
+
+				const numSpan = document.createElement('span');
+				numSpan.className = 'Number';
+				numSpan.textContent = header;
+				row.appendChild(numSpan);
+
+				const textSpan = document.createElement('span');
+				textSpan.className = 'Text';
+				textSpan.innerHTML = restoreAll(immediateText, links, citations);
+				row.appendChild(textSpan);
+
+				container.appendChild(row);
+
+				if (children.length) {
+					buildFromNested(children, depth + 1);
+				}
+			} else if (typeof content === 'string') {
+				const cleaned = content.trim();
+				if (cleaned) {
+					const row = document.createElement('div');
+					row.className = `statute-line level-${depth}`;
+					const textSpan = document.createElement('span');
+					textSpan.className = 'Text';
+					textSpan.innerHTML = restoreAll(cleaned, links, citations);
+					row.appendChild(textSpan);
+					container.appendChild(row);
+				}
+			}
 		}
+	}
 
-		const textSpan = document.createElement('span');
-		textSpan.className = 'Text';
-		textSpan.innerHTML = line.text || '';
-		row.appendChild(textSpan);
-
-		container.appendChild(row);
-	});
+	buildFromNested(nested, 0);
 
 	return container;
 }
@@ -366,27 +515,6 @@ function restoreAll(str, links, citations) {
 	// Restore citations first (they may contain %%LINK%% placeholders),
 	// then restore the links inside them.
 	return restoreLinks(restoreCitations(str, citations), links);
-}
-
-function getIndentLevel(number) {
-	if (!number) return 0;
-
-	// (1) (2) (3) …
-	if (/^\(\d+\)$/.test(number)) return 0;
-
-	// (a) (b) (c) …
-	if (/^\([a-z]\)$/i.test(number)) return 1;
-
-	// (2)(a)1.  or  (b)1.  → treat as level 2
-	if (/\d+\.$/.test(number) && /\(/.test(number)) return 2;
-
-	// 1. 2. 3. …
-	if (/^\d+\.$/.test(number)) return 2;
-
-	// a. b. c. …
-	if (/^[a-z]\.$/i.test(number)) return 3;
-
-	return 0;
 }
 
 /**
