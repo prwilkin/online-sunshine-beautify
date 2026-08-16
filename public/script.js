@@ -220,19 +220,18 @@ function cleanStatuteHtml(rawHtml) {
  * while preserving hyperlinks.
  * removes soft hyphens / zero-width chars that cause broken word
  */
-/**
- * Convert the messy SectionBody into clean, indented plain text
- * while preserving hyperlinks.
- * removes soft hyphens / zero-width chars that cause broken word
- */
 function processSectionBody(bodyEl) {
 	// 1. Start from innerHTML so we keep <a> tags
 	let html = bodyEl.innerHTML;
 
 	// 2. Very aggressive cleanup of characters that cause broken words
 	html = html
-		// soft hyphen (the main culprit)
+		// soft hyphen – Unicode form
 		.replace(/\u00AD/g, '')
+		// soft hyphen – HTML entity forms (the real culprit)
+		.replace(/&shy;/gi, '')
+		.replace(/&#173;/gi, '')
+		.replace(/&#x0*AD;/gi, '')
 		// zero-width spaces and joiners
 		.replace(/[\u200B\u200C\u200D\uFEFF]/g, '')
 		// various special spaces → normal space
@@ -283,8 +282,7 @@ function processSectionBody(bodyEl) {
 	// 5. Split on Florida numbering patterns
 	//    We keep the hierarchical style you liked
 	// Split only on real structural numbers, never on citations
-	const numberPattern = /(\(\d+\)|\([a-z]\)|\d+\.|[a-z]\.)(?=\s)/g;
-
+	const numberPattern = /(?:^|\s)(\(\d+\)|\([a-z]\)|(?<![.\d])\d+\.|(?<![a-zA-Z&;])[a-z]\.)(?=\s|$)/g;
 	const matches = [...text.matchAll(numberPattern)];
 	const lines = [];
 
@@ -301,8 +299,8 @@ function processSectionBody(bodyEl) {
 
 		for (let i = 0; i < matches.length; i++) {
 			const m = matches[i];
-			const number = m[0].trim();
-			const start = m.index + number.length;
+			const number = m[1];                 // the pure number (capture group)
+			const start = m.index + m[0].length; // full-match length, including any leading whitespace
 			const end = (i + 1 < matches.length) ? matches[i + 1].index : text.length;
 			let body = text.slice(start, end).trim();
 
