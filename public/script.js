@@ -279,46 +279,191 @@ function processSectionBody(bodyEl) {
 		}
 	);
 
-	// 5. Split on Florida numbering patterns
-	//    We keep the hierarchical style you liked
-	// Split only on real structural numbers, never on citations
-	const numberPattern = /(?:^|\s)(\(\d+\)|\([a-z]\)|(?<![.\d])\d+\.|(?<![a-zA-Z&;])[a-z]\.)(?=\s|$)/g;
-	const matches = [...text.matchAll(numberPattern)];
-	const lines = [];
 
-	if (matches.length === 0) {
-		lines.push({ number: '', text: restoreAll(text, links, citations), level: 0 });
-	} else {
-		// text before first number
-		if (matches[0].index > 0) {
-			const preamble = text.slice(0, matches[0].index).trim();
-			if (preamble) {
-				lines.push({ number: '', text: restoreAll(preamble, links, citations), level: 0 });
-			}
-		}
 
-		for (let i = 0; i < matches.length; i++) {
-			const m = matches[i];
-			const number = m[1];                 // the pure number (capture group)
-			const start = m.index + m[0].length; // full-match length, including any leading whitespace
-			const end = (i + 1 < matches.length) ? matches[i + 1].index : text.length;
-			let body = text.slice(start, end).trim();
+	// 5. Split on Florida hierarchical numbering
+	const sub1re = /\([0-9]+\)/g;
+	const sub2re = /\([a-z]+\)/g;
+	const sub3re = /[0-9]+\./g;
+	const sub4re = /[a-z]\./g;
 
-			// If the body starts with another structural number, leave it empty
-			// so the next match becomes its own line (gives the hierarchical style)
-			if (/^(\(\d+\)|\([a-z]\)|\d+\.|[a-z]\.)/.test(body)) {
-				body = '';
-			}
-
-			body = body.replace(/^[\s.—–-]+/, '').trim();
-
-			lines.push({
-				number,
-				text: restoreAll(body, links, citations),
-				level: getIndentLevel(number)
-			});
-		}
+	function nextLetter(prev, curr) {
+		if (!prev) return curr === "a";
+		return prev.toLowerCase().charCodeAt(0) + 1 === curr.toLowerCase().charCodeAt(0);
 	}
+
+	function safeIndex(match) {
+		return match ? match.index : Infinity;
+	}
+
+	/**
+	 * Main parser
+	 * Returns { nested, indented }
+	 *   nested   → array of arrays preserving hierarchy
+	 *   indented → text buffer with newline + correct number of tabs
+	 */
+	function parseSubsections(text) {
+		// Reset lastIndex on all regexes
+		[sub1re, sub2re, sub3re, sub4re].forEach(r => (r.lastIndex = 0));
+
+		const nested = [];          // final nested structure
+		const stack = [];           // helps build nesting: [{level, node}, ...]
+		let lastIndex = 0;
+
+		let sub1 = 0;
+		let sub2 = "";
+		let sub3 = 0;
+		let sub4 = "";
+
+		// Helper to push content into the deepest open node
+		function addContent(content) {
+			if (!content) return;
+			if (stack.length === 0) {
+				// top-level text before any subsection
+				nested.push(["", content]);
+			} else {
+				const deepest = stack[stack.length - 1].node;
+				deepest[1] += content;
+			}
+		}
+
+		while (true) {
+			// Find the next candidate of each type starting from lastIndex
+			sub1re.lastIndex = lastIndex;
+			sub2re.lastIndex = lastIndex;
+			sub3re.lastIndex = lastIndex;
+			sub4re.lastIndex = lastIndex;
+
+			const m1 = sub1re.exec(text);
+			const m2 = sub2re.exec(text);
+			const m3 = sub3re.exec(text);
+			const m4 = sub4re.exec(text);
+
+			// Determine which (if any) is the closest valid sequential match
+			let chosen = null;
+			let chosenLevel = 0;
+			let chosenMatch = null;
+
+			// Priority: closest index that is also sequential
+			const candidates = [
+				{
+					level: 1,
+					match: m1,
+					valid: m1 && Number(m1[0].slice(1, -1)) > sub1,
+				},
+				{
+					level: 2,
+					match: m2,
+					valid:
+						m2 &&
+						((sub2 === "" && m2[0].slice(1, -1) === "a") ||
+							nextLetter(sub2, m2[0].slice(1, -1))),
+				},
+				{
+					level: 3,
+					match: m3,
+					valid: m3 && Number(m3[0].slice(0, -1)) > sub3,
+				},
+				{
+					level: 4,
+					match: m4,
+					valid:
+						m4 &&
+						((sub4 === "" && m4[0].slice(0, -1) === "a") ||
+							nextLetter(sub4, m4[0].slice(0, -1))),
+				},
+			];
+
+			// Pick the valid candidate with the smallest index
+			let bestIdx = Infinity;
+			for (const c of candidates) {
+				if (c.valid && c.match.index < bestIdx) {
+					bestIdx = c.match.index;
+					chosen = c;
+				}
+			}
+
+			if (!chosen) break; // no more valid matches
+
+			// Add text that was between previous match and this one
+			addContent(text.slice(lastIndex, chosen.match.index));
+
+			// Create the new node: [header, content]
+			const node = [chosen.match[0], ""];
+
+			// Adjust nesting stack according to level
+			while (stack.length && stack[stack.length - 1].level >= chosen.level) {
+				stack.pop();
+			}
+
+			if (stack.length === 0) {
+				nested.push(node);
+			} else {
+				// Attach as child of the current deepest node
+				const parent = stack[stack.length - 1].node;
+				if (!Array.isArray(parent[1])) {
+					// convert content string → array of children if needed
+					parent[1] = parent[1] ? [["", parent[1]]] : [];
+				}
+				parent[1].push(node);
+			}
+
+			stack.push({ level: chosen.level, node });
+
+			// Update sequence counters and reset deeper ones
+			if (chosen.level === 1) {
+				sub1 = Number(chosen.match[0].slice(1, -1));
+				sub2 = "";
+				sub3 = 0;
+				sub4 = "";
+			} else if (chosen.level === 2) {
+				sub2 = chosen.match[0].slice(1, -1);
+				sub3 = 0;
+				sub4 = "";
+			} else if (chosen.level === 3) {
+				sub3 = Number(chosen.match[0].slice(0, -1));
+				sub4 = "";
+			} else if (chosen.level === 4) {
+				sub4 = chosen.match[0].slice(0, -1);
+			}
+
+			lastIndex = chosen.match.index + chosen.match[0].length;
+		}
+
+		// Remaining text after the last match
+		addContent(text.slice(lastIndex));
+
+		// ---------- Build indented text buffer ----------
+		function toIndented(nodes, depth = 0) {
+			let out = "";
+			for (const [header, content] of nodes) {
+				if (header) {
+					out += "\t".repeat(depth) + header + "\n";
+				}
+				if (typeof content === "string") {
+					if (content.trim()) {
+						const lines = content.split("\n");
+						for (const line of lines) {
+							if (line.trim()) {
+								out += "\t".repeat(depth + (header ? 1 : 0)) + line + "\n";
+							} else {
+								out += "\n";
+							}
+						}
+					}
+				} else if (Array.isArray(content)) {
+					out += toIndented(content, depth + (header ? 1 : 0));
+				}
+			}
+			return out;
+		}
+
+		const indented = toIndented(nested);
+
+		return { nested, indented };
+	}
+	parsed = parseSubsections(text);
+
 
 	// 6. Build DOM
 	const container = document.createElement('div');
