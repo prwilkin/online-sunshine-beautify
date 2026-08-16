@@ -269,9 +269,32 @@ function processSectionBody(bodyEl) {
 	// 4b. Protect Florida statute citations so they are never split
 	//     Matches: "s. 893.135(1)", "ss. 775.082", "s. %%LINK0%% (1)", etc.
 	//     Does NOT match hierarchical list items like "s. Human trafficking"
+	//     Captures forms such as:
+	//       s. 893.03
+	//       s. 893.03(2)
+	//       s. 893.03(2)(b)
+	//       s. 893.03(2)(b)1.
+	//       ss. 775.082, 775.083
+	//       s. %%LINK0%% (1)   (after link protection)
 	const citations = [];
+
+	// 1. Classic "s. / ss." forms
 	text = text.replace(
-		/\b(?:s|ss)\.?\s*(?:%%LINK\d+%%|\d[\d.]*)(?:\s*\([0-9a-z]+\))*/gi,
+		/\b(?:s|ss)\.?\s*(?:%%LINK\d+%%|\d+\.\d+)(?:\s*\([0-9a-z]+\))*(?:\s*\d+\.)?(?:\s*[a-z]\.)?/gi,
+		(match) => {
+			const id = citations.length;
+			citations.push(match);
+			return `%%CITE${id}%%`;
+		}
+	);
+
+	// 2. Cross-references that are explicitly introduced by
+	//    "subparagraph(s)", "sub-subparagraph(s)", "paragraph(s)", etc.
+	//    e.g.  sub-subparagraphs (1)(a)3.a.-j.
+	//          subparagraphs (2)(b)1.-3.
+	//          paragraph (1)(a)
+	text = text.replace(
+		/\b(?:sub-?subparagraphs?|subparagraphs?|paragraphs?|subsections?)\s+\([0-9]+\)(?:\([a-z]+\))*(?:\d+\.)?(?:[a-z]\.)?(?:-[a-z]\.)?/gi,
 		(match) => {
 			const id = citations.length;
 			citations.push(match);
@@ -281,33 +304,27 @@ function processSectionBody(bodyEl) {
 
 
 
-	// 5. Split on Florida hierarchical numbering
+	// 5. Split on Florida hierarchical numbering (sequential + nested)
 	const sub1re = /\([0-9]+\)/g;
-	const sub2re = /\([a-z]+\)/g;
-	const sub3re = /[0-9]+\./g;
-	const sub4re = /[a-z]\./g;
+	const sub2re = /\([a-z]+\)(?![;\-])/g;
+	const sub3re = /(?<![\d,$])[0-9]+\.(?![;\-a-zA-Z\d])/g;   // ← changed
+	const sub4re = /(?<![a-zA-Z])[a-z]\.(?![;\-a-zA-Z])/g;     // ← tightened for safety
 
 	function nextLetter(prev, curr) {
 		if (!prev) return curr === "a";
 		return prev.toLowerCase().charCodeAt(0) + 1 === curr.toLowerCase().charCodeAt(0);
 	}
 
-	function safeIndex(match) {
-		return match ? match.index : Infinity;
-	}
-
 	/**
-	 * Main parser
-	 * Returns { nested, indented }
-	 *   nested   → array of arrays preserving hierarchy
-	 *   indented → text buffer with newline + correct number of tabs
+	 * Sequential hierarchical parser.
+	 * Returns nested structure: array of [header, content] where content is
+	 * either a string or an array of child nodes.
 	 */
 	function parseSubsections(text) {
-		// Reset lastIndex on all regexes
 		[sub1re, sub2re, sub3re, sub4re].forEach(r => (r.lastIndex = 0));
 
-		const nested = [];          // final nested structure
-		const stack = [];           // helps build nesting: [{level, node}, ...]
+		const nested = [];
+		const stack = [];
 		let lastIndex = 0;
 
 		let sub1 = 0;
@@ -315,11 +332,9 @@ function processSectionBody(bodyEl) {
 		let sub3 = 0;
 		let sub4 = "";
 
-		// Helper to push content into the deepest open node
 		function addContent(content) {
 			if (!content) return;
 			if (stack.length === 0) {
-				// top-level text before any subsection
 				nested.push(["", content]);
 			} else {
 				const deepest = stack[stack.length - 1].node;
@@ -328,7 +343,6 @@ function processSectionBody(bodyEl) {
 		}
 
 		while (true) {
-			// Find the next candidate of each type starting from lastIndex
 			sub1re.lastIndex = lastIndex;
 			sub2re.lastIndex = lastIndex;
 			sub3re.lastIndex = lastIndex;
@@ -339,12 +353,6 @@ function processSectionBody(bodyEl) {
 			const m3 = sub3re.exec(text);
 			const m4 = sub4re.exec(text);
 
-			// Determine which (if any) is the closest valid sequential match
-			let chosen = null;
-			let chosenLevel = 0;
-			let chosenMatch = null;
-
-			// Priority: closest index that is also sequential
 			const candidates = [
 				{
 					level: 1,
@@ -374,7 +382,7 @@ function processSectionBody(bodyEl) {
 				},
 			];
 
-			// Pick the valid candidate with the smallest index
+			let chosen = null;
 			let bestIdx = Infinity;
 			for (const c of candidates) {
 				if (c.valid && c.match.index < bestIdx) {
@@ -383,15 +391,12 @@ function processSectionBody(bodyEl) {
 				}
 			}
 
-			if (!chosen) break; // no more valid matches
+			if (!chosen) break;
 
-			// Add text that was between previous match and this one
 			addContent(text.slice(lastIndex, chosen.match.index));
 
-			// Create the new node: [header, content]
 			const node = [chosen.match[0], ""];
 
-			// Adjust nesting stack according to level
 			while (stack.length && stack[stack.length - 1].level >= chosen.level) {
 				stack.pop();
 			}
@@ -399,10 +404,8 @@ function processSectionBody(bodyEl) {
 			if (stack.length === 0) {
 				nested.push(node);
 			} else {
-				// Attach as child of the current deepest node
 				const parent = stack[stack.length - 1].node;
 				if (!Array.isArray(parent[1])) {
-					// convert content string → array of children if needed
 					parent[1] = parent[1] ? [["", parent[1]]] : [];
 				}
 				parent[1].push(node);
@@ -410,7 +413,6 @@ function processSectionBody(bodyEl) {
 
 			stack.push({ level: chosen.level, node });
 
-			// Update sequence counters and reset deeper ones
 			if (chosen.level === 1) {
 				sub1 = Number(chosen.match[0].slice(1, -1));
 				sub2 = "";
@@ -430,65 +432,67 @@ function processSectionBody(bodyEl) {
 			lastIndex = chosen.match.index + chosen.match[0].length;
 		}
 
-		// Remaining text after the last match
 		addContent(text.slice(lastIndex));
 
-		// ---------- Build indented text buffer ----------
-		function toIndented(nodes, depth = 0) {
-			let out = "";
-			for (const [header, content] of nodes) {
-				if (header) {
-					out += "\t".repeat(depth) + header + "\n";
-				}
-				if (typeof content === "string") {
-					if (content.trim()) {
-						const lines = content.split("\n");
-						for (const line of lines) {
-							if (line.trim()) {
-								out += "\t".repeat(depth + (header ? 1 : 0)) + line + "\n";
-							} else {
-								out += "\n";
-							}
-						}
-					}
-				} else if (Array.isArray(content)) {
-					out += toIndented(content, depth + (header ? 1 : 0));
-				}
-			}
-			return out;
-		}
-
-		const indented = toIndented(nested);
-
-		return { nested, indented };
+		return nested;
 	}
-	parsed = parseSubsections(text);
 
+	const nested = parseSubsections(text);
 
-	// 6. Build DOM
+	// 6. Build DOM from the nested structure
 	const container = document.createElement('div');
 	container.className = 'section-body';
 
-	lines.forEach(line => {
-		if (!line.number && !line.text) return;
+	function buildFromNested(nodes, depth = 0) {
+		for (const node of nodes) {
+			const [header, content] = node;
 
-		const row = document.createElement('div');
-		row.className = `statute-line level-${line.level}`;
+			if (header) {
+				let immediateText = '';
+				let children = [];
 
-		if (line.number) {
-			const numSpan = document.createElement('span');
-			numSpan.className = 'Number';
-			numSpan.textContent = line.number;
-			row.appendChild(numSpan);
+				if (typeof content === 'string') {
+					immediateText = content;
+				} else if (Array.isArray(content)) {
+					const residual = content.find(c => c[0] === '');
+					if (residual) immediateText = residual[1] || '';
+					children = content.filter(c => c[0] !== '');
+				}
+
+				const row = document.createElement('div');
+				row.className = `statute-line level-${depth}`;
+
+				const numSpan = document.createElement('span');
+				numSpan.className = 'Number';
+				numSpan.textContent = header;
+				row.appendChild(numSpan);
+
+				const textSpan = document.createElement('span');
+				textSpan.className = 'Text';
+				textSpan.innerHTML = restoreAll(immediateText, links, citations);
+				row.appendChild(textSpan);
+
+				container.appendChild(row);
+
+				if (children.length) {
+					buildFromNested(children, depth + 1);
+				}
+			} else if (typeof content === 'string') {
+				const cleaned = content.trim();
+				if (cleaned) {
+					const row = document.createElement('div');
+					row.className = `statute-line level-${depth}`;
+					const textSpan = document.createElement('span');
+					textSpan.className = 'Text';
+					textSpan.innerHTML = restoreAll(cleaned, links, citations);
+					row.appendChild(textSpan);
+					container.appendChild(row);
+				}
+			}
 		}
+	}
 
-		const textSpan = document.createElement('span');
-		textSpan.className = 'Text';
-		textSpan.innerHTML = line.text || '';
-		row.appendChild(textSpan);
-
-		container.appendChild(row);
-	});
+	buildFromNested(nested, 0);
 
 	return container;
 }
@@ -511,27 +515,6 @@ function restoreAll(str, links, citations) {
 	// Restore citations first (they may contain %%LINK%% placeholders),
 	// then restore the links inside them.
 	return restoreLinks(restoreCitations(str, citations), links);
-}
-
-function getIndentLevel(number) {
-	if (!number) return 0;
-
-	// (1) (2) (3) …
-	if (/^\(\d+\)$/.test(number)) return 0;
-
-	// (a) (b) (c) …
-	if (/^\([a-z]\)$/i.test(number)) return 1;
-
-	// (2)(a)1.  or  (b)1.  → treat as level 2
-	if (/\d+\.$/.test(number) && /\(/.test(number)) return 2;
-
-	// 1. 2. 3. …
-	if (/^\d+\.$/.test(number)) return 2;
-
-	// a. b. c. …
-	if (/^[a-z]\.$/i.test(number)) return 3;
-
-	return 0;
 }
 
 /**
