@@ -315,6 +315,11 @@ function processSectionBody(bodyEl) {
 		return prev.toLowerCase().charCodeAt(0) + 1 === curr.toLowerCase().charCodeAt(0);
 	}
 
+	function nextNumber(prev, curr) {
+		if (!prev) return curr === "1";
+		return Number(prev) + 1 === Number(curr);
+	}
+
 	/**
 	 * Sequential hierarchical parser.
 	 * Returns nested structure: array of [header, content] where content is
@@ -357,7 +362,7 @@ function processSectionBody(bodyEl) {
 				{
 					level: 1,
 					match: m1,
-					valid: m1 && Number(m1[0].slice(1, -1)) > sub1,
+					valid: m1 && nextNumber(sub1, m1[0].slice(1, -1)),
 				},
 				{
 					level: 2,
@@ -370,7 +375,7 @@ function processSectionBody(bodyEl) {
 				{
 					level: 3,
 					match: m3,
-					valid: m3 && Number(m3[0].slice(0, -1)) > sub3,
+					valid: m3 && nextNumber(sub3, m3[0].slice(0, -1)),
 				},
 				{
 					level: 4,
