@@ -276,6 +276,9 @@ function processSectionBody(bodyEl) {
 	//       s. 893.03(2)(b)1.
 	//       ss. 775.082, 775.083
 	//       s. %%LINK0%% (1)   (after link protection)
+	//		Protects as a statute and subsection:
+	//		 s. 794.0115. (b)	<- sub section at (b)
+	//		 Section 787.01(3)(a)2. or 3.; 3. Sec...	<- sub section at 3.
 	//    Catches: 18 U.S.C. s. 2510, 18 U.S.C. § 2510, 18 USC 2510, etc.
 	const citations = [];
 
@@ -291,7 +294,7 @@ function processSectionBody(bodyEl) {
 
 	// 2. Classic single "s. / ss." forms
 	text = text.replace(
-		/\b(?:s|ss)\.?\s*(?:%%LINK\d+%%|\d+\.\d+)(?:\s*\([0-9a-z]+\))*(?:\s*\d+\.)?(?:\s*[a-z]\.)?/gi,
+		/\b(?:s|ss)\.?\s*(?:%%LINK\d+%%|\d+\.\d+)(?:\([0-9a-z]+\))*(?:\d+\.)?(?:[a-z]\.)?\.?(?=[\s,;)]|$)/gi,
 		(match) => {
 			const id = citations.length;
 			citations.push(match);
@@ -309,10 +312,20 @@ function processSectionBody(bodyEl) {
 		}
 	);
 
-	// 4
-	// . Explicit cross-reference phrases
+	// 4. Explicit cross-reference phrases
 	text = text.replace(
-		/\b(?:sub-?subparagraphs?|subparagraphs?|paragraphs?|subsections?)\s+\([0-9]+\)(?:\([a-z]+\))*(?:\d+\.)?(?:[a-z]\.)?(?:-[a-z]\.)?/gi,
+		/\b(?:sub-?subparagraphs?|subparagraphs?|paragraphs?|subsections?)\s+\([0-9a-z]+\)(?:\([0-9a-z]+\))*(?:\d+\.)?(?:[a-z]\.)?(?:-[a-z0-9().]+)?/gi,
+		(match) => {
+			const id = citations.length;
+			citations.push(match);
+			return `%%CITE${id}%%`;
+		}
+	);
+
+	// 5. Full-word "Section" citations (handles both plain numbers and link placeholders)
+	//    Section 787.01(2), Section 847.0135(5), Section 847.0135 (5), etc.
+	text = text.replace(
+		/\bSections?\s+(?:%%LINK\d+%%|\d+\.\d+)(?:\s*\([0-9a-z]+\))*(?:\d+\.)?(?:[a-z]\.)?/gi,
 		(match) => {
 			const id = citations.length;
 			citations.push(match);
@@ -324,8 +337,8 @@ function processSectionBody(bodyEl) {
 	// 5. Split on Florida hierarchical numbering (sequential + nested)
 	const sub1re = /\([0-9]+\)/g;
 	const sub2re = /\([a-z]+\)(?![;\-])/g;
-	const sub3re = /(?<![\d,$])[0-9]+\.(?![;\-a-zA-Z\d])/g;   // ← changed
-	const sub4re = /(?<![a-zA-Z])[a-z]\.(?![;\-a-zA-Z])/g;     // ← tightened for safety
+	const sub3re = /(?<![\d,$])[0-9]+\.(?![;\-a-zA-Z\d])/g;
+	const sub4re = /(?<![a-zA-Z])[a-z]\.(?![;\-a-zA-Z])/g;
 
 	function nextLetter(prev, curr) {
 		if (!prev) return curr === "a";
@@ -335,6 +348,15 @@ function processSectionBody(bodyEl) {
 	function nextNumber(prev, curr) {
 		if (!prev) return curr === "1";
 		return Number(prev) + 1 === Number(curr);
+	}
+
+	function findNextValid(re, from, isValid) {
+		re.lastIndex = from;
+		let m;
+		while ((m = re.exec(text)) !== null) {
+			if (isValid(m)) return m;
+		}
+		return null;
 	}
 
 	/**
@@ -370,38 +392,29 @@ function processSectionBody(bodyEl) {
 			sub3re.lastIndex = lastIndex;
 			sub4re.lastIndex = lastIndex;
 
-			const m1 = sub1re.exec(text);
-			const m2 = sub2re.exec(text);
-			const m3 = sub3re.exec(text);
-			const m4 = sub4re.exec(text);
+			const m1 = findNextValid(sub1re, lastIndex, (m) =>
+				nextNumber(sub1, m[0].slice(1, -1))
+			);
+
+			const m2 = findNextValid(sub2re, lastIndex, (m) => {
+				const letter = m[0].slice(1, -1);
+				return (sub2 === "" && letter === "a") || nextLetter(sub2, letter);
+			});
+
+			const m3 = findNextValid(sub3re, lastIndex, (m) =>
+				nextNumber(sub3, m[0].slice(0, -1))
+			);
+
+			const m4 = findNextValid(sub4re, lastIndex, (m) => {
+				const letter = m[0].slice(0, -1);
+				return (sub4 === "" && letter === "a") || nextLetter(sub4, letter);
+			});
 
 			const candidates = [
-				{
-					level: 1,
-					match: m1,
-					valid: m1 && nextNumber(sub1, m1[0].slice(1, -1)),
-				},
-				{
-					level: 2,
-					match: m2,
-					valid:
-						m2 &&
-						((sub2 === "" && m2[0].slice(1, -1) === "a") ||
-							nextLetter(sub2, m2[0].slice(1, -1))),
-				},
-				{
-					level: 3,
-					match: m3,
-					valid: m3 && nextNumber(sub3, m3[0].slice(0, -1)),  // must be exactly next number
-				},
-				{
-					level: 4,
-					match: m4,
-					valid:
-						m4 &&
-						((sub4 === "" && m4[0].slice(0, -1) === "a") ||
-							nextLetter(sub4, m4[0].slice(0, -1))),
-				},
+				{ level: 1, match: m1, valid: !!m1 },
+				{ level: 2, match: m2, valid: !!m2 },
+				{ level: 3, match: m3, valid: !!m3 },
+				{ level: 4, match: m4, valid: !!m4 },
 			];
 
 			let chosen = null;
