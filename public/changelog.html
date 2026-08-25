@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>F.S.S. Cleaner</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="/icon.ico" type="image/x-icon">
+  <style>
+    .changelog-body {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.75rem;
+      box-shadow: var(--shadow);
+      line-height: 1.7;
+    }
+
+    .changelog-body h1 {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .changelog-body h2 {
+      font-size: 1.2rem;
+      margin: 1.5rem 0 0.5rem;
+    }
+
+    .changelog-body h3 {
+      font-size: 1.05rem;
+      margin: 1.25rem 0 0.4rem;
+    }
+
+    .changelog-body ul {
+      padding-left: 1.25rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .changelog-body li {
+      margin-bottom: 0.35rem;
+    }
+
+    .changelog-body code {
+      background: var(--bg);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.88em;
+      border: 1px solid var(--border);
+    }
+
+    .changelog-body pre {
+      background: var(--bg);
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      margin: 0.75rem 0;
+    }
+
+    .loading,
+    .error {
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="site-header">
+      <div class="header-left">
+        <button class="hamburger" id="hamburger" aria-label="Open menu" aria-expanded="false">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <h1 class="site-title"><a href="index.html">Statute Cleaner</a></h1>
+      </div>
+
+      <nav class="nav-dropdown" id="navDropdown" hidden>
+        <a href="index.html">Home</a>
+        <a href="changelog.html">Changelog</a>
+      </nav>
+
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">🌙</button>
+    </header>
+
+    <div class="changelog-body" id="changelog">
+      <p class="loading">Loading changelog…</p>
+    </div>
+
+    <footer>
+      Have an issue or suggestion? Reach out on
+      <a href="https://github.com/prwilkin/online-sunshine-beautify/issues/new" target="_blank"
+        rel="noopener noreferrer">GitHub</a>
+      • No data stored
+      <br><br>
+      Not legally binding nor approved of by the State of Florida and any Law Enforcement entities therein
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    function mdToHtml(md) {
+      return md
+        .replace(/^### (.*)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.*)$/gm, '<h2>$1</h2>')
+        .replace(/^# (.*)$/gm, '<h1>$1</h1>')
+        .replace(/```[\s\S]*?```/g, (block) => {
+          const code = block.replace(/^```\w*\n?/, '').replace(/```$/, '');
+          return '<pre><code>' + code.replace(/</g, '&lt;') + '</code></pre>';
+        })
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/^\s*[-*] (.*)$/gm, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>\n?)+/g, (m) => '<ul>' + m + '</ul>')
+        .replace(/^(?!<[hul]|<li|<pre|<code)(.+)$/gm, '<p>$1</p>')
+        .replace(/<\/p>\n<p>/g, '</p><p>');
+    }
+
+    fetch('changelog.md')
+      .then((r) => {
+        if (!r.ok) throw new Error('Could not load changelog.md');
+        return r.text();
+      })
+      .then((md) => {
+        document.getElementById('changelog').innerHTML = mdToHtml(md);
+      })
+      .catch((err) => {
+        document.getElementById('changelog').innerHTML =
+          '<p class="error">' + err.message + '</p>';
+      });
+  </script>
+</body>
+</html>

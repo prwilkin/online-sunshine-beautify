@@ -24,6 +24,87 @@ toggle.addEventListener('click', () => {
 	}
 });
 
+// Hamburger menu
+const hamburger = document.getElementById('hamburger');
+const navDropdown = document.getElementById('navDropdown');
+
+if (hamburger && navDropdown) {
+  hamburger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = hamburger.getAttribute('aria-expanded') === 'true';
+    hamburger.setAttribute('aria-expanded', String(!open));
+    navDropdown.hidden = open;
+  });
+
+  // Close when clicking outside
+  document.addEventListener('click', () => {
+    hamburger.setAttribute('aria-expanded', 'false');
+    navDropdown.hidden = true;
+  });
+
+  navDropdown.addEventListener('click', (e) => e.stopPropagation());
+}
+
+// ======================================================================
+// Statute Niceity Functions
+/**
+ * Copy the cleaned statute as plain text with proper indentation
+ * so it pastes cleanly into email, Word, notes, etc.
+ */
+function copyStatuteAsText(root) {
+	const lines = [];
+
+	// Header
+	const summary = root.querySelector('details.statute-section > summary');
+	if (summary) {
+		const num = summary.querySelector('.sec-num')?.textContent?.trim() || '';
+		const catchline = summary.querySelector('.sec-catchline')?.textContent?.trim() || '';
+		lines.push(`${num} ${catchline}`.trim());
+		lines.push('');
+	}
+
+	// Body
+	root.querySelectorAll('.statute-line').forEach(row => {
+		const levelClass = [...row.classList].find(c => c.startsWith('level-'));
+		const level = levelClass ? Number(levelClass.replace('level-', '')) : 0;
+		const indent = '    '.repeat(level);
+
+		const number = row.querySelector('.Number')?.textContent?.trim() || '';
+		const text = row.querySelector('.Text')?.textContent?.trim() || '';
+
+		if (number || text) {
+			lines.push(`${indent}${number} ${text}`.trimEnd());
+		}
+	});
+
+	// History
+	const history = root.querySelector('.history-block, .History');
+	if (history) {
+		lines.push('');
+		lines.push(history.textContent.replace(/\s+/g, ' ').trim());
+	}
+
+	const plainText = lines.join('\n');
+
+	navigator.clipboard.writeText(plainText).then(() => {
+		const btn = root.querySelector('#copyStatute');
+		if (btn) {
+			const original = btn.textContent;
+			btn.textContent = 'Copied!';
+			btn.disabled = true;
+			setTimeout(() => {
+				btn.textContent = original;
+				btn.disabled = false;
+			}, 1500);
+		}
+	}).catch(err => {
+		console.error('Copy failed:', err);
+		alert('Could not copy to clipboard.');
+	});
+}
+
+
+// ======================================================================
 // Form handling + cleaning logic
 document.getElementById('urlForm').addEventListener('submit', async (e) => {
 	e.preventDefault();
@@ -213,6 +294,14 @@ function cleanStatuteHtml(rawHtml) {
 	}
 
 	return buildWrapper(contentNode);
+}
+
+function escapeHtml(str) {
+	return String(str)
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;');
 }
 
 /**
@@ -552,9 +641,7 @@ function restoreAll(str, links, citations) {
 	return restoreLinks(restoreCitations(str, citations), links);
 }
 
-/**
- * Build the final wrapper with controls
- */
+// Build the final wrapper with controls
 function buildWrapper(contentNode) {
 	const wrapper = document.createElement('div');
 	wrapper.className = 'cleaned-statute';
@@ -590,68 +677,4 @@ function buildWrapper(contentNode) {
 	}, 0);
 
 	return wrapper.outerHTML;
-}
-
-/**
- * Copy the cleaned statute as plain text with proper indentation
- * so it pastes cleanly into email, Word, notes, etc.
- */
-function copyStatuteAsText(root) {
-	const lines = [];
-
-	// Header
-	const summary = root.querySelector('details.statute-section > summary');
-	if (summary) {
-		const num = summary.querySelector('.sec-num')?.textContent?.trim() || '';
-		const catchline = summary.querySelector('.sec-catchline')?.textContent?.trim() || '';
-		lines.push(`${num} ${catchline}`.trim());
-		lines.push('');
-	}
-
-	// Body
-	root.querySelectorAll('.statute-line').forEach(row => {
-		const levelClass = [...row.classList].find(c => c.startsWith('level-'));
-		const level = levelClass ? Number(levelClass.replace('level-', '')) : 0;
-		const indent = '    '.repeat(level);
-
-		const number = row.querySelector('.Number')?.textContent?.trim() || '';
-		const text = row.querySelector('.Text')?.textContent?.trim() || '';
-
-		if (number || text) {
-			lines.push(`${indent}${number} ${text}`.trimEnd());
-		}
-	});
-
-	// History
-	const history = root.querySelector('.history-block, .History');
-	if (history) {
-		lines.push('');
-		lines.push(history.textContent.replace(/\s+/g, ' ').trim());
-	}
-
-	const plainText = lines.join('\n');
-
-	navigator.clipboard.writeText(plainText).then(() => {
-		const btn = root.querySelector('#copyStatute');
-		if (btn) {
-			const original = btn.textContent;
-			btn.textContent = 'Copied!';
-			btn.disabled = true;
-			setTimeout(() => {
-				btn.textContent = original;
-				btn.disabled = false;
-			}, 1500);
-		}
-	}).catch(err => {
-		console.error('Copy failed:', err);
-		alert('Could not copy to clipboard.');
-	});
-}
-
-function escapeHtml(str) {
-	return String(str)
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;');
 }
