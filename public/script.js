@@ -276,9 +276,20 @@ function processSectionBody(bodyEl) {
 	//       s. 893.03(2)(b)1.
 	//       ss. 775.082, 775.083
 	//       s. %%LINK0%% (1)   (after link protection)
+	//    Catches: 18 U.S.C. s. 2510, 18 U.S.C. § 2510, 18 USC 2510, etc.
 	const citations = [];
 
-	// 1. Classic "s. / ss." forms
+	// 1. Citation lists  (s. 1002.53(3)(a), (b), or (c))
+	text = text.replace(
+		/\b(?:s|ss)\.?\s*(?:%%LINK\d+%%|\d+\.\d+)(?:\([0-9a-z]+\))*(?:\s*,\s*\([0-9a-z]+\))+(?:\s*,?\s*or\s*\([0-9a-z]+\))?/gi,
+		(match) => {
+			const id = citations.length;
+			citations.push(match);
+			return `%%CITE${id}%%`;
+		}
+	);
+
+	// 2. Classic single "s. / ss." forms
 	text = text.replace(
 		/\b(?:s|ss)\.?\s*(?:%%LINK\d+%%|\d+\.\d+)(?:\s*\([0-9a-z]+\))*(?:\s*\d+\.)?(?:\s*[a-z]\.)?/gi,
 		(match) => {
@@ -288,11 +299,18 @@ function processSectionBody(bodyEl) {
 		}
 	);
 
-	// 2. Cross-references that are explicitly introduced by
-	//    "subparagraph(s)", "sub-subparagraph(s)", "paragraph(s)", etc.
-	//    e.g.  sub-subparagraphs (1)(a)3.a.-j.
-	//          subparagraphs (2)(b)1.-3.
-	//          paragraph (1)(a)
+	// 3. U.S. Code citations
+	text = text.replace(
+		/\b\d+\s*U\.?\s*S\.?\s*C\.?\s*(?:§|s\.?|sec\.?)?\s*\d+(?:\([a-z0-9]+\))*(?:\.\d+)?/gi,
+		(match) => {
+			const id = citations.length;
+			citations.push(match);
+			return `%%CITE${id}%%`;
+		}
+	);
+
+	// 4
+	// . Explicit cross-reference phrases
 	text = text.replace(
 		/\b(?:sub-?subparagraphs?|subparagraphs?|paragraphs?|subsections?)\s+\([0-9]+\)(?:\([a-z]+\))*(?:\d+\.)?(?:[a-z]\.)?(?:-[a-z]\.)?/gi,
 		(match) => {
@@ -301,7 +319,6 @@ function processSectionBody(bodyEl) {
 			return `%%CITE${id}%%`;
 		}
 	);
-
 
 
 	// 5. Split on Florida hierarchical numbering (sequential + nested)
@@ -313,6 +330,11 @@ function processSectionBody(bodyEl) {
 	function nextLetter(prev, curr) {
 		if (!prev) return curr === "a";
 		return prev.toLowerCase().charCodeAt(0) + 1 === curr.toLowerCase().charCodeAt(0);
+	}
+
+	function nextNumber(prev, curr) {
+		if (!prev) return curr === "1";
+		return Number(prev) + 1 === Number(curr);
 	}
 
 	/**
@@ -357,7 +379,7 @@ function processSectionBody(bodyEl) {
 				{
 					level: 1,
 					match: m1,
-					valid: m1 && Number(m1[0].slice(1, -1)) > sub1,
+					valid: m1 && nextNumber(sub1, m1[0].slice(1, -1)),
 				},
 				{
 					level: 2,
@@ -370,7 +392,7 @@ function processSectionBody(bodyEl) {
 				{
 					level: 3,
 					match: m3,
-					valid: m3 && Number(m3[0].slice(0, -1)) > sub3,
+					valid: m3 && nextNumber(sub3, m3[0].slice(0, -1)),  // must be exactly next number
 				},
 				{
 					level: 4,
